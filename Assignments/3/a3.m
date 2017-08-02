@@ -144,8 +144,25 @@ function ret = d_loss_by_d_model(model, data, wd_coefficient)
   % The returned object is supposed to be exactly like parameter <model>, i.e. it has fields ret.input_to_hid and ret.hid_to_class. However, the contents of those matrices are gradients (d loss by d model parameter), instead of model parameters.
 	 
   % This is the only function that you're expected to change. Right now, it just returns a lot of zeros, which is obviously not the correct output. Your job is to replace that by a correct computation.
-  ret.input_to_hid = model.input_to_hid * 0;
-  ret.hid_to_class = model.hid_to_class * 0;
+  hid_input = model.input_to_hid * data.inputs; % input to the hidden units, i.e. before the logistic. size: <number of hidden units> by <number of data cases>
+  hid_output = logistic(hid_input); % output of the hidden units, i.e. after the logistic. size: <number of hidden units> by <number of data cases>
+  class_input = model.hid_to_class * hid_output; % input to the components of the softmax. size: <number of classes, i.e. 10> by <number of data cases>
+  
+  class_normalizer = log_sum_exp_over_rows(class_input);
+  log_class_prob = class_input - repmat(class_normalizer, [size(class_input, 1), 1]);
+  class_prob = exp(log_class_prob);
+  
+  % input data size
+  N = size(data.inputs, 2);
+  
+  % hidden to output gradient
+  output_delta = (class_prob - data.targets);
+  ret.hid_to_class = output_delta * hid_output' ./ N + wd_coefficient * model.hid_to_class;
+ 
+  % input to hidden gradient
+  error_derivated = model.hid_to_class'*output_delta .* hid_output .* (1 - hid_output);
+  ret.input_to_hid = error_derivated * data.inputs' ./ N + wd_coefficient * model.input_to_hid;
+
 end
 
 function ret = model_to_theta(model)
